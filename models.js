@@ -32,5 +32,19 @@ async function storeLoginData(sessionId, email, nickname, macAddress, ip, create
     async function deleteUserBySessionId(sessionId) {
         return await LoginModel.findOneAndDelete({ sessionId });
     }
-
-export  { LoginModel,storeLoginData, deleteUserBySessionId }
+    async function updateSessionTimestamps(sessionId, createAD_CDMX, lastAccess) {
+        try {
+            const updatedSession = await LoginModel.findOneAndUpdate(
+                { sessionId }, // Filtro
+                { createAD_CDMX, lastAccess }, // Campos a actualizar
+                { new: true } // Devuelve el documento actualizado
+            );
+    
+            return updatedSession;
+        } catch (error) {
+            console.error("Error al actualizar timestamps:", error);
+            throw error;
+        }
+    }
+    
+export  { LoginModel,storeLoginData, deleteUserBySessionId,updateSessionTimestamps }
