@@ -214,7 +214,7 @@ async function checkAndDestroySessions() {
             console.log(`Marcando sesión como finalizada por falla del sistema: ${sessionID}`);
 
             // Actualizar en MongoDB
-            await Login.findOneAndUpdate(
+            await LoginModel.findOneAndUpdate(
                 { sessionId: sessionID },
                 { status: "Finalizada por Falla de Sistema" }
             );

@@ -13,7 +13,7 @@ const loginSchema = new mongoose.Schema({
 const LoginModel = mongoose.model('Login', loginSchema);
 
 async function storeLoginData(sessionId, email, nickname, macAddress, ip, createAD_CDMX, lastAccess, status = "Activa") {
-    const loginData = new Login({
+    const loginData = new LoginModel({
         sessionId,
         email,
         nickname,
