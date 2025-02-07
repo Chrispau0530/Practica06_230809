@@ -1,3 +1,4 @@
+
 import mongoose from 'mongoose';
 
 const loginSchema = new mongoose.Schema({
@@ -6,6 +7,7 @@ const loginSchema = new mongoose.Schema({
     nickname: String,
     macAddress: String,
     ip: String,
+    status:String,
     createAD_CDMX: Date,
     lastAccess: Date
 });
@@ -16,7 +18,7 @@ async function storeLoginData(sessionId, email, nickname, macAddress, ip, create
     const loginData = new LoginModel({
         sessionId,
         email,
-        nickname,
+        nickname,   
         macAddress,
         ip,
         createAD_CDMX,
@@ -34,9 +36,9 @@ async function storeLoginData(sessionId, email, nickname, macAddress, ip, create
     async function updateSessionTimestamps(sessionId, createAD_CDMX, lastAccess) {
         try {
             const updatedSession = await LoginModel.findOneAndUpdate(
-                { sessionId }, // Filtro
-                { createAD_CDMX, lastAccess }, // Campos a actualizar
-                { new: true } // Devuelve el documento actualizado
+                { sessionId }, 
+                { createAD_CDMX, lastAccess }, 
+                { new: true } 
             );
     
             return updatedSession;
@@ -46,4 +48,4 @@ async function storeLoginData(sessionId, email, nickname, macAddress, ip, create
         }
     }
     
-export  { LoginModel,storeLoginData, deleteUserBySessionId,updateSessionTimestamps }
+export  { LoginModel,storeLoginData,deleteUserBySessionId,updateSessionTimestamps }

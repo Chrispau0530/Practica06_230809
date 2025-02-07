@@ -5,7 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import moment from 'moment-timezone';
 import os from 'os';
 import mongoose from 'mongoose';
-import { storeLoginData, deleteUserBySessionId, updateSessionTimestamps } from './models.js';
+import { LoginModel,storeLoginData,deleteUserBySessionId, updateSessionTimestamps } from './models.js';
 
 mongoose.connect('mongodb+srv://rodriguezperezchristianpaul:Mapachito070323@cluster0chris.v5bqv.mongodb.net/practica06_db?retryWrites=true&w=majority&appName=Cluster0Chris')
     .then(() => console.log("Mongodb atlas connected"))
@@ -21,10 +21,9 @@ app.listen(PORT, () => {
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Almacenamiento en memoria para sesiones
 const sessions = {};
 
-// Configuración de sesión
+
 app.use(
     session({
         secret: "CPRP-SesionesHTTP-VariablesDeSesion",
@@ -105,26 +104,43 @@ app.post('/login', async (req, res) => {
 });
 
 app.post("/logout", async (req, res) => {
-    const { sessionId } = req.body;
+    const { sessionId } = req.body; 
 
     if (!sessionId) {
         return res.status(400).json({ message: "Session ID es requerido" });
     }
 
     try {
-        const updatedSession = await Login.findOneAndUpdate(
+        console.log(`Intentando cerrar sesión con ID: ${sessionId}`);
+
+        // Verificar si la sesión existe antes de actualizar
+        const sessionExists = await LoginModel.findOne({ sessionId });
+        if (!sessionExists) {
+            return res.status(404).json({ message: "No se encontró la sesión en la base de datos" });
+        }
+
+        // Actualizar el estado de la sesión en MongoDB
+        const updatedSession = await LoginModel.findOneAndUpdate(
             { sessionId },
             { status: "Finalizada por el Usuario" },
             { new: true }
         );
 
         if (!updatedSession) {
-            return res.status(404).json({ message: "No se encontró la sesión" });
+            return res.status(500).json({ message: "Error al actualizar la sesión" });
         }
 
-        res.status(200).json({ message: "Logout exitoso, sesión finalizada", session: updatedSession });
+        // Eliminar de la memoria local (si estás manejando sesiones en memoria)
+        delete sessions[sessionId];
+
+        return res.status(200).json({ 
+            message: "Logout exitoso, sesión finalizada", 
+            session: updatedSession 
+        });
+
     } catch (error) {
-        res.status(500).json({ message: "Error al finalizar la sesión", error });
+        console.error("Error en /logout:", error);
+        return res.status(500).json({ message: "Error al finalizar la sesión", error });
     }
 });
 
@@ -208,7 +224,7 @@ async function checkAndDestroySessions() {
         const sessionData = sessions[sessionID];
         const createdAt = new Date(sessionData.createAD_CDMX);
         const sessionAgeMS = now - createdAt;
-        const minutes = Math.floor(sessionAgeMS / (1000 * 60));
+        const minutes = Math.floor(sessionAgeMS / (1000 * 20));
 
         if (minutes > 2) {
             console.log(`Marcando sesión como finalizada por falla del sistema: ${sessionID}`);
@@ -225,5 +241,5 @@ async function checkAndDestroySessions() {
     }
 }
 
-// Ejecutar la verificación periódica cada minuto
+
 setInterval(checkAndDestroySessions, 60000);
