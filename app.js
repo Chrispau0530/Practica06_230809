@@ -83,10 +83,11 @@ app.post('/login', async (req, res) => {
         ip: getLocalIp(),
         createAD_CDMX: now,
         lastAccess: now,
+        status: "Activa", 
     };
 
     try {
-        await storeLoginData(sessionId, email, nickname, macAddress, getLocalIp(), now, now);
+        await storeLoginData(sessionId, email, nickname, macAddress, getLocalIp(), now, now, "Activa");
         console.log('Datos almacenados en MongoDB.');
     } catch (error) {
         console.error('Error al guardar en MongoDB:', error);
@@ -103,7 +104,6 @@ app.post('/login', async (req, res) => {
     });
 });
 
-// Ruta de cierre de sesión
 app.post("/logout", async (req, res) => {
     const { sessionId } = req.body;
 
@@ -112,20 +112,23 @@ app.post("/logout", async (req, res) => {
     }
 
     try {
-        const deletedUser = await deleteUserBySessionId(sessionId);
+        const updatedSession = await Login.findOneAndUpdate(
+            { sessionId },
+            { status: "Finalizada por el Usuario" },
+            { new: true }
+        );
 
-        if (!deletedUser) {
+        if (!updatedSession) {
             return res.status(404).json({ message: "No se encontró la sesión" });
         }
 
-        res.status(200).json({ message: "Logout exitoso, usuario eliminado" });
+        res.status(200).json({ message: "Logout exitoso, sesión finalizada", session: updatedSession });
     } catch (error) {
-        res.status(500).json({ message: "Error al eliminar sesión", error });
+        res.status(500).json({ message: "Error al finalizar la sesión", error });
     }
 });
 
-// Estado de la sesión
-app.get('/status', (req, res) => {
+app.get('/status', async (req, res) => {
     const { sessionID } = req.query;
 
     if (!sessionID || !sessions[sessionID]) {
@@ -133,18 +136,6 @@ app.get('/status', (req, res) => {
     }
 
     const session = sessions[sessionID];
-    const now = new Date();
-
-    const started = new Date(session.createAD_CDMX);
-    const lastUpdate = new Date(session.lastAccess);
-
-    const createAD_CDMX = moment(started).tz('America/Mexico_City').format('YYYY-MM-DD HH:mm:ss');
-    const lastAccess = moment(lastUpdate).tz('America/Mexico_City').format('YYYY-MM-DD HH:mm:ss');
-
-    const sessionAgeMS = now - started;
-    const hours = Math.floor(sessionAgeMS / (1000 * 60 * 60));
-    const minutes = Math.floor((sessionAgeMS % (1000 * 60 * 60)) / (1000 * 60));
-    const seconds = Math.floor((sessionAgeMS % (1000 * 60)) / 1000);
 
     res.status(200).json({
         message: 'Estado de la sesión',
@@ -153,11 +144,13 @@ app.get('/status', (req, res) => {
         email: session.email,
         ip_cliente: req.ip,
         mac_cliente: session.macAddress,
-        inicio: createAD_CDMX,
-        ultimoAcceso: lastAccess,
-        antigüedad: `${hours} horas, ${minutes} minutos y ${seconds} segundos`
+        inicio: moment(session.createAD_CDMX).tz('America/Mexico_City').format('YYYY-MM-DD HH:mm:ss'),
+        ultimoAcceso: moment(session.lastAccess).tz('America/Mexico_City').format('YYYY-MM-DD HH:mm:ss'),
+        status: session.status // Se agrega el estado de la sesión
     });
 });
+
+
 
 // Listar sesiones activas
 app.get('/listCurrentSession', (req, res) => {
@@ -208,3 +201,29 @@ app.post("/update", async (req, res) => {
         res.status(500).json({ message: "Error al actualizar los timestamps", error });
     }
 });
+async function checkAndDestroySessions() {
+    const now = new Date();
+
+    for (const sessionID in sessions) {
+        const sessionData = sessions[sessionID];
+        const createdAt = new Date(sessionData.createAD_CDMX);
+        const sessionAgeMS = now - createdAt;
+        const minutes = Math.floor(sessionAgeMS / (1000 * 60));
+
+        if (minutes > 2) {
+            console.log(`Marcando sesión como finalizada por falla del sistema: ${sessionID}`);
+
+            // Actualizar en MongoDB
+            await Login.findOneAndUpdate(
+                { sessionId: sessionID },
+                { status: "Finalizada por Falla de Sistema" }
+            );
+
+            // Eliminar de la memoria local
+            delete sessions[sessionID];
+        }
+    }
+}
+
+// Ejecutar la verificación periódica cada minuto
+setInterval(checkAndDestroySessions, 60000);
