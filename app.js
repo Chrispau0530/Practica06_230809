@@ -166,39 +166,60 @@ app.get('/status', async (req, res) => {
     });
 });
 
-
-
-// Listar sesiones activas
-app.get('/listCurrentSession', (req, res) => {
-    const activeSessions = Object.values(sessions).map(session => ({
-        sessionId: session.sessionId,
-        email: session.email,
-        nickname: session.nickname,
-        macAddress: session.macAddress,
-        ip: session.ip,
-        createAD_CDMX: moment(session.createAD_CDMX).tz('America/Mexico_City').format('YYYY-MM-DD HH:mm:ss'),
-        lastAccess: moment(session.lastAccess).tz('America/Mexico_City').format('YYYY-MM-DD HH:mm:ss')
-    }));
-
-    res.status(200).json({
-        message: "Sesiones activas",
-        activeSessions
-    });
+// Obtener sesiones activas desde MongoDB
+app.get('/activeSessions', async (req, res) => {
+    try {
+        const activeSessions = await LoginModel.find({ status: "Activa" });
+        res.status(200).json({ message: "Sesiones activas", activeSessions });
+    } catch (error) {
+        res.status(500).json({ message: "Error al obtener sesiones activas", error });
+    }
 });
 
-// Actualizar timestamps de una sesión
-app.post("/update", async (req, res) => {
-    const { sessionId, createAD_CDMX, lastAccess } = req.body;
+// Obtener todas las sesiones (activas y cerradas)
+app.get('/allSessions', async (req, res) => {
+    try {
+        const allSessions = await LoginModel.find();
+        res.status(200).json({ message: "Todas las sesiones", allSessions });
+    } catch (error) {
+        res.status(500).json({ message: "Error al obtener todas las sesiones", error });
+    }
+});
+app.delete('/clearSessions', async (req, res) => {
+    try {
+        // 🔹 1. Eliminar todas las sesiones de la memoria local
+        const sessionCount = Object.keys(sessions).length;
+        Object.keys(sessions).forEach(sessionId => delete sessions[sessionId]);
 
-    if (!sessionId || !createAD_CDMX || !lastAccess) {
-        return res.status(400).json({ message: "Se requieren sessionId, createAD_CDMX y lastAccess" });
+        // 🔹 2. Eliminar todas las sesiones de la base de datos MongoDB
+        const result = await LoginModel.deleteMany({});
+
+        // 🔹 3. Responder con el número de sesiones eliminadas
+        return res.status(200).json({
+            message: "Todas las sesiones han sido eliminadas",
+            deletedFromMemory: sessionCount,
+            deletedFromDB: result.deletedCount
+        });
+    } catch (error) {
+        console.error("❌ Error al eliminar las sesiones:", error);
+        return res.status(500).json({ message: "Error interno al eliminar sesiones", error });
+    }
+});
+
+// Actualizar timestamps solo con sessionId
+app.post("/update", async (req, res) => {
+    const { sessionId } = req.body;
+
+    if (!sessionId) {
+        return res.status(400).json({ message: "sessionId es requerido" });
     }
 
     try {
-        const updatedSession = await updateSessionTimestamps(
-            sessionId,
-            new Date(createAD_CDMX),
-            new Date(lastAccess)
+        const now = new Date();
+        const updatedSession = await LoginModel.findOneAndUpdate(
+            { sessionId },
+            { lastAccess: now },
+            { new: true }
         );
 
         if (!updatedSession) {
@@ -208,15 +229,16 @@ app.post("/update", async (req, res) => {
         res.status(200).json({
             message: "Timestamps actualizados correctamente",
             updatedSession: {
-                ...updatedSession,
-                createAD_CDMX: moment(updatedSession.createAD_CDMX).tz('America/Mexico_City').format('YYYY-MM-DD HH:mm:ss'),
-                lastAccess: moment(updatedSession.lastAccess).tz('America/Mexico_City').format('YYYY-MM-DD HH:mm:ss'),
-            },
+                sessionId: updatedSession.sessionId,
+                lastAccess: moment(updatedSession.lastAccess).tz('America/Mexico_City').format('YYYY-MM-DD HH:mm:ss')
+            }
         });
     } catch (error) {
-        res.status(500).json({ message: "Error al actualizar los timestamps", error });
+        res.status(500).json({ message: "Error al actualizar el timestamp", error });
     }
 });
+
+
 async function checkAndDestroySessions() {
     const now = new Date();
 
@@ -240,6 +262,7 @@ async function checkAndDestroySessions() {
         }
     }
 }
+
 
 
 setInterval(checkAndDestroySessions, 60000);
