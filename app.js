@@ -5,7 +5,8 @@ import { v4 as uuidv4 } from 'uuid';
 import moment from 'moment-timezone';
 import os from 'os';
 import mongoose from 'mongoose';
-import { LoginModel,storeLoginData,deleteUserBySessionId, updateSessionTimestamps } from './models.js';
+import cors from 'cors'; // Import cors
+import { LoginModel, storeLoginData, deleteUserBySessionId, updateSessionTimestamps } from './models.js';
 
 mongoose.connect('mongodb+srv://rodriguezperezchristianpaul:Mapachito070323@cluster0chris.v5bqv.mongodb.net/practica06_db?retryWrites=true&w=majority&appName=Cluster0Chris')
     .then(() => console.log("Mongodb atlas connected"))
@@ -17,7 +18,11 @@ const PORT = 3000;
 app.listen(PORT, () => {
     console.log(`Servidor iniciado en http://localhost:${PORT}`);
 });
-
+app.use(cors({
+    origin: '*',
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+  }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
